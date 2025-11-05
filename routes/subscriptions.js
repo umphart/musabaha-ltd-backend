@@ -310,6 +310,7 @@ router.get("/", async (req, res) => {
       count: subscriptions.length,
       data: subscriptions 
     });
+    console.log(`Fetched ${subscriptions.length} subscriptions for email: ${email}`);
   } catch (error) {
     console.error("Error fetching subscriptions:", error);
     res.status(500).json({ 

@@ -1,8 +1,105 @@
 const pool = require('../config/database');
 
 const Subscription = {
+  // Get by ID from both subscriptions and usersTable
+  getById: async (id) => {
+    try {
+      // First try subscriptions table
+      const subscriptionQuery = 'SELECT * FROM subscriptions WHERE id = $1';
+      const subscriptionResult = await pool.query(subscriptionQuery, [id]);
+      
+      if (subscriptionResult.rows[0]) {
+        const subscription = subscriptionResult.rows[0];
+        
+        // Parse plot_ids if it exists and is a string
+        if (subscription.plot_ids && typeof subscription.plot_ids === 'string') {
+          subscription.plot_ids_array = subscription.plot_ids.split(',')
+            .map(plotId => plotId.trim())
+            .filter(plotId => plotId !== '');
+        } else {
+          subscription.plot_ids_array = [];
+        }
+        
+        subscription.source = 'subscriptions';
+        return subscription;
+      }
+      
+      // If not found in subscriptions, try usersTable
+      const usersTableQuery = 'SELECT * FROM usersTable WHERE id = $1';
+      const usersTableResult = await pool.query(usersTableQuery, [id]);
+      
+      if (usersTableResult.rows[0]) {
+        const user = usersTableResult.rows[0];
+        user.source = 'usersTable';
+        return user;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in getById:', error);
+      throw error;
+    }
+  },
+
+  // Find by email from both subscriptions and usersTable
+  findByEmail: async (email) => {
+    try {
+      // Query subscriptions table
+      const subscriptionQuery = 'SELECT * FROM subscriptions WHERE email = $1 ORDER BY created_at DESC';
+      const subscriptionResult = await pool.query(subscriptionQuery, [email]);
+      
+      // Query usersTable
+      const usersTableQuery = 'SELECT * FROM usersTable WHERE email = $1 ORDER BY created_at DESC';
+      const usersTableResult = await pool.query(usersTableQuery, [email]);
+      
+      // Combine results and add source identifier
+      const subscriptionData = subscriptionResult.rows.map(item => ({
+        ...item,
+        source: 'subscriptions'
+      }));
+      
+      const usersTableData = usersTableResult.rows.map(item => ({
+        ...item,
+        source: 'usersTable'
+      }));
+      
+      return [...subscriptionData, ...usersTableData];
+    } catch (error) {
+      console.error('Error in findByEmail:', error);
+      throw error;
+    }
+  },
+
+  // Optional: Unified method to get from specific source
+  getByIdFromSource: async (id, source) => {
+    try {
+      if (source === 'subscriptions') {
+        const query = 'SELECT * FROM subscriptions WHERE id = $1';
+        const result = await pool.query(query, [id]);
+        if (result.rows[0]) {
+          const item = result.rows[0];
+          item.source = 'subscriptions';
+          return item;
+        }
+      } else if (source === 'usersTable') {
+        const query = 'SELECT * FROM usersTable WHERE id = $1';
+        const result = await pool.query(query, [id]);
+        if (result.rows[0]) {
+          const item = result.rows[0];
+          item.source = 'usersTable';
+          return item;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error in getByIdFromSource:', error);
+      throw error;
+    }
+  },
+
+  // Your existing methods remain the same
   create: async (data) => {
-    // Map frontend field names to database column names
+    // ... your existing create method code
     const fieldMap = {
       title: 'title',
       name: 'name',
@@ -38,10 +135,9 @@ const Subscription = {
       signatureText: 'signature_text',
       signatureFile: 'signature_file',
       plotId: 'plot_id',
-      plot_ids: 'plot_ids', // ✅ ADD THIS FIELD MAPPING
+      plot_ids: 'plot_ids',
     };
 
-    // Filter out undefined values and map to database columns
     const columns = [];
     const values = [];
     const placeholders = [];
@@ -56,7 +152,6 @@ const Subscription = {
       }
     }
 
-    // Add created_at timestamp
     columns.push('created_at');
     values.push(new Date());
     placeholders.push(`$${paramCount}`);
@@ -83,38 +178,9 @@ const Subscription = {
     }
   },
 
-  // ... rest of your methods remain the same
   getAll: async () => {
     const query = 'SELECT * FROM subscriptions ORDER BY created_at DESC';
     const result = await pool.query(query);
-    return result.rows;
-  },
-
-getById: async (id) => {
-  const query = 'SELECT * FROM subscriptions WHERE id = $1';
-  const result = await pool.query(query, [id]);
-  
-  if (result.rows[0]) {
-    const subscription = result.rows[0];
-    
-    // Parse plot_ids if it exists and is a string
-    if (subscription.plot_ids && typeof subscription.plot_ids === 'string') {
-      subscription.plot_ids_array = subscription.plot_ids.split(',')
-        .map(plotId => plotId.trim())
-        .filter(plotId => plotId !== '');
-    } else {
-      subscription.plot_ids_array = [];
-    }
-    
-    return subscription;
-  }
-  
-  return null;
-},
-
-  findByEmail: async (email) => {
-    const query = 'SELECT * FROM subscriptions WHERE email = $1 ORDER BY created_at DESC';
-    const result = await pool.query(query, [email]);
     return result.rows;
   },
 
@@ -125,11 +191,11 @@ getById: async (id) => {
     return result.rows[0];
   },
 
-  // Add method to check if plot is already reserved
   isPlotReserved: async (plotId) => {
     const query = 'SELECT * FROM subscriptions WHERE plot_id = $1 AND status IN ($2, $3)';
     const result = await pool.query(query, [plotId, 'pending', 'approved']);
     return result.rows.length > 0;
   }
 };
+
 module.exports = Subscription;

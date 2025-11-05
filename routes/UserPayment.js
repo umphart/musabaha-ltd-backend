@@ -72,8 +72,7 @@ router.post("/", upload.single("receipt"), async (req, res) => {
 });
 
 /**
- * PATCH /api/user-payments/:id/status
- * Update payment status + update outstanding balance if approved
+
  */
 router.patch("/:id/status", async (req, res) => {
   const client = await pool.connect();
@@ -133,19 +132,19 @@ router.patch("/:id/status", async (req, res) => {
 
       updatedPayment = balanceResult.rows[0];
 
-      // Optionally: mark plot as sold on approval
+      // ✅ Only update plot status, not owner
       if (updatedPayment.plot_id) {
         await client.query(
-          "UPDATE plots SET status = 'sold', owner = $1 WHERE id = $2",
-          [updatedPayment.user_id, updatedPayment.plot_id]
+          "UPDATE plots SET status = 'sold' WHERE id = $1",
+          [updatedPayment.plot_id]
         );
       }
     }
 
-    // 4️⃣ If rejected → optionally revert plot
+    // 4️⃣ If rejected → revert plot to available (no owner change)
     if (status === "rejected" && payment.plot_id) {
       await client.query(
-        "UPDATE plots SET status = 'Available', owner = NULL WHERE id = $1",
+        "UPDATE plots SET status = 'Available' WHERE id = $1",
         [payment.plot_id]
       );
     }
@@ -163,6 +162,7 @@ router.patch("/:id/status", async (req, res) => {
     client.release();
   }
 });
+
 
 /**
  * GET /api/user-payments/user/:userId

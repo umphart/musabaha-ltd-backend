@@ -133,5 +133,82 @@ router.get("/", async (req, res) => {
     res.status(500).json({ success: false, error: "Server error" });
   }
 });
+// Get all subsequent payments for a specific user
+router.get("/user/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const result = await pool.query(`
+      SELECT 
+        sp.*,
+        u.name AS user_name,
+        u.email AS user_email,
+        p.number AS plot_number,
+        pr.amount AS original_amount,
+        pr.status AS original_request_status
+      FROM subsequent_payments sp
+      LEFT JOIN payment_requests pr ON sp.payment_request_id = pr.id
+      LEFT JOIN userstable u ON pr.user_id = u.id
+      LEFT JOIN plots p ON pr.plot_id = p.id
+      WHERE pr.user_id = $1
+      ORDER BY sp.created_at DESC
+    `, [userId]);
+
+    res.json({
+      success: true,
+      payments: result.rows,
+      count: result.rows.length
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching user subsequent payments:", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error: " + err.message
+    });
+  }
+});
+
+// Get a specific subsequent payment for a user (with ownership verification)
+router.get("/user/:userId/:paymentId", async (req, res) => {
+  try {
+    const { userId, paymentId } = req.params;
+
+    const result = await pool.query(`
+      SELECT 
+        sp.*,
+        u.name AS user_name,
+        u.email AS user_email,
+        p.number AS plot_number,
+        pr.amount AS original_amount,
+        pr.status AS original_request_status
+      FROM subsequent_payments sp
+      LEFT JOIN payment_requests pr ON sp.payment_request_id = pr.id
+      LEFT JOIN userstable u ON pr.user_id = u.id
+      LEFT JOIN plots p ON pr.plot_id = p.id
+      WHERE sp.id = $1 AND pr.user_id = $2
+    `, [paymentId, userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Subsequent payment not found or you don't have access to this payment"
+      });
+    }
+
+    res.json({
+      success: true,
+      payment: result.rows[0]
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching user subsequent payment:", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error: " + err.message
+    });
+  }
+});
+
 
 module.exports = router;

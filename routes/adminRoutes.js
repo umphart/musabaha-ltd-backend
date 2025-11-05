@@ -155,5 +155,47 @@ router.get('/me', async (req, res) => {
     });
   }
 });
+// Update payment route - remove /admin prefix since it's already mounted
+router.put('/payments/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const paymentId = req.params.id;
+    const paymentData = req.body;
+    
+    const result = await updatePayment(paymentId, paymentData);
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    console.error('Error in update payment route:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Delete payment route
+router.delete('/payments/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const paymentId = req.params.id;
+    
+    const result = await deletePayment(paymentId);
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    console.error('Error in delete payment route:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
 
 module.exports = router;

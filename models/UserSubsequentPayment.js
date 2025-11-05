@@ -83,8 +83,6 @@ async updateStatus(paymentId, status) {
 
   return payment;
 }
-
-
 ,
 
   async getByUser(userId) {
